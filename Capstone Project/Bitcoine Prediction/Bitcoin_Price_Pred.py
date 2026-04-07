@@ -32,9 +32,12 @@ from sklearn import model_selection
 from sklearn.metrics import accuracy_score
 
 import os
+# https://www.kaggle.com/code/richardgg93/rnn-example
 
 #%% import data
-df = pd.read_csv('Cryptocurrency Prices by Date.csv')
+script_dir = os.path.dirname(os.path.abspath(__file__))
+file_path = os.path.join(script_dir, 'Cryptocurrency Prices by Date.csv')
+df = pd.read_csv(file_path)
 
 #convert Unix time ine #Date column to datetime format
 df['Date'] = pd.to_datetime(df['Date'], unit='ms')
@@ -50,20 +53,43 @@ duplicated_counts = df.groupby(['Currency', 'Date']).size()
 duplicated_counts = duplicated_counts[duplicated_counts > 1]
 print("Number of duplicated date for each currency:")
 print(duplicated_counts)
-# Let's take a look at the data
 
-# Create Year-Month key
-df['YearMonth'] = df['Date'].dt.to_period('M')
 
-# Compute monthly mean and SD per currency
-df['month_mean'] = df.groupby(['Currency', 'YearMonth'])['Price'].transform('mean')
-df['month_SD'] = df.groupby(['Currency', 'YearMonth'])['Price'].transform('std')
-df['month_diff'] = df.groupby(['Currency', 'YearMonth'])['Price'].transform(lambda x: x.iloc[-1] - x.iloc[0])
+#create df_m that has date column with monthly frequency and price column with mean price for that month for each currency
+df_m = (
+    df
+    .set_index('Date')
+    .groupby('Currency')['Price']
+    .resample('ME')                # monthly frequency
+    .mean()                      # mean price per month
+    .reset_index()
+)
+
+monthly_ohlc = (
+    df
+    .set_index('Date')
+    .groupby('Currency')['Price']
+    .resample('ME')
+    .agg(['first', 'last'])   # first = open, last = close
+    .reset_index()
+    .rename(columns={
+        'first': 'open price',
+        'last': 'close price'
+    })
+)
+df_m = df_m.merge(
+    monthly_ohlc,
+    on=['Currency', 'Date'],
+    how='left'
+)
+df_m['month_diff'] = df_m['close price'] - df_m['open price']
+
 
 btc_df= df[df['Currency'] == 'bitcoin'].copy()
-# bt_df['month_diff'] = bt_df.groupby('YearMonth')['Price'].transform(lambda x: x.iloc[-1] - x.iloc[0])
-# %% -------------------- At first let's take 10 random currencies with minimum Price > threshold and plot them.
+btc_df_m=df_m[df_m['Currency'] == 'bitcoin'].copy()
 
+
+# %% -------------------- At first let's take 10 random currencies with minimum Price > threshold and plot them.
 np.random.seed(40)  # For reproducibility
 threshold=10
 eligible_currencies = df.loc[df['Price'] < 1000000, 'Currency'].unique()
@@ -88,7 +114,9 @@ layout = go.Layout(
     legend=dict(orientation="h")
 )
 
-py.iplot(go.Figure(data=data, layout=layout), filename='basic-line')
+py.plot(go.Figure(data=data, layout=layout), filename='basic-line.html', auto_open=False)
+#show the plot in notebook
+py.iplot(go.Figure(data=data, layout=layout))
 #Currencies are sampled randomly, but you should see that some currencies started trading later 
 
 
@@ -109,10 +137,10 @@ layout = go.Layout(
     legend=dict(orientation="h")
 )
 
-py.iplot(go.Figure(data=data, layout=layout), filename='basic-line')
+py.plot(go.Figure(data=data, layout=layout), filename='bitcoin-price.html', auto_open=False)
 
 
-https://www.kaggle.com/code/richardgg93/rnn-example
+# https://www.kaggle.com/code/richardgg93/rnn-example
 
 
 
